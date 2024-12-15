@@ -3,10 +3,10 @@ from tkinter import messagebox, ttk
 import json
 import os
 
-from User_Registration import UserRegistration
-from Order_Placement import Cart, OrderPlacement, UserProfile, RestaurantMenu, PaymentMethod
-from Payment_Processing import PaymentProcessing
-from Restaurant_Browsing import RestaurantDatabase, RestaurantBrowsing
+from test_UserRegistration import UserRegistration
+from test_OrderPlacement import Cart, OrderPlacement, UserProfile, RestaurantMenu, PaymentMethod
+from test_PaymentProcessing import PaymentProcessing
+from test_RestaurantBrowsing import RestaurantDatabase, RestaurantBrowsing
 
 # Utility functions for user data storage
 USERS_FILE = "users.json"
@@ -183,6 +183,11 @@ class MainAppFrame(tk.Frame):
         self.cuisine_var.pack(side="left", padx=5)
         tk.Button(search_frame, text="Search", command=self.search_restaurants).pack(side="left")
 
+        tk.Label(search_frame, text="Location:").pack(side="left")
+        self.location_var = tk.Entry(search_frame)
+        self.location_var.pack(side="left", padx=5)
+        tk.Button(search_frame, text="Search by Location", command=self.search_restaurants_by_location).pack(side="left")
+
         # Results Treeview
         self.results_tree = ttk.Treeview(self, columns=("cuisine", "location", "rating"), show="headings")
         self.results_tree.heading("cuisine", text="Cuisine")
@@ -202,6 +207,13 @@ class MainAppFrame(tk.Frame):
         self.results_tree.delete(*self.results_tree.get_children())
         cuisine = self.cuisine_var.get().strip()
         results = self.browsing.search_by_filters(cuisine_type=cuisine if cuisine else None)
+        for r in results:
+            self.results_tree.insert("", "end", values=(r["cuisine"], r["location"], r["rating"]))
+
+    def search_restaurants_by_location(self):
+        self.results_tree.delete(*self.results_tree.get_children())
+        location = self.location_var.get().strip()
+        results = self.browsing.search_by_location(location if location else None)
         for r in results:
             self.results_tree.insert("", "end", values=(r["cuisine"], r["location"], r["rating"]))
 
