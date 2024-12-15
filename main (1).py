@@ -218,7 +218,7 @@ class MainAppFrame(tk.Frame):
 
     def search_restaurants_by_location(self):
         self.results_tree.delete(*self.results_tree.get_children())
-        
+        location = self.location_var.get().strip()
         results = self.browsing.search_by_location(location if location else None)
         for r in results:
             self.results_tree.insert("", "end", values=(r["cuisine"], r["location"], r["rating"]))
@@ -243,9 +243,39 @@ class MainAppFrame(tk.Frame):
         menu_popup = AddItemPopup(self, self.restaurant_menu, self.cart)
         self.wait_window(menu_popup)
 
+    def remove_item_from_cart(self, item_name):
+        """
+        Removes an item from the cart.
+
+        Args:
+            item_name (str): The name of the item to be removed.
+        """
+        self.cart.remove_item(item_name)
+        messagebox.showinfo("Cart Update", f"Item '{item_name}' removed from cart.")
+        self.view_cart()  # Refresh the cart view after removal
+
+    def update_item_quantity_in_cart(self, item_name, new_quantity):
+        """
+        Updates the quantity of an item in the cart.
+
+        Args:
+            item_name (str): The name of the item to update.
+            new_quantity (int): The new quantity for the item.
+        """
+        result = self.cart.update_item_quantity(item_name, new_quantity)
+        messagebox.showinfo("Cart Update", result)
+        self.view_cart()  # Refresh the cart view after updating quantity
+
     def view_cart(self):
         cart_view = CartViewPopup(self, self.cart)
         self.wait_window(cart_view)
+
+    def view_order_history(self):
+        """
+        Displays the user's order history in a new popup window.
+        """
+        history_popup = OrderHistoryPopup(self, self.user_profile)
+        self.wait_window(history_popup)
 
     def checkout(self):
         # Validate order and proceed if valid
@@ -258,6 +288,51 @@ class MainAppFrame(tk.Frame):
         checkout_popup = CheckoutPopup(self, self.order_placement)
         self.wait_window(checkout_popup)
 
+class OrderHistoryPopup(tk.Toplevel):
+    def __init__(self, master, user_profile):
+        super().__init__(master)
+        self.title("Order History")
+
+        self.user_profile = user_profile
+        self.order_history = self.user_profile.order_history
+
+        tree = ttk.Treeview(self, columns=("Order ID", "Date", "Total", "Status"), show="headings")
+        tree.heading("Order ID", text="Order ID")
+        tree.heading("Date", text="Date")
+        tree.heading("Total", text="Total")
+        tree.heading("Status", text="Status")
+
+        for order in self.order_history:
+            tree.insert("", "end", values=(order["order_id"], order["date"], order["total_amount"], order["status"]))
+
+        tree.pack(pady=10, fill="x")
+
+        # Add filter options
+        filter_frame = tk.Frame(self)
+        filter_frame.pack(pady=5)
+
+        tk.Label(filter_frame, text="Filter by:").pack(side="left")
+        self.filter_var = tk.StringVar()
+        self.filter_var.set("Status")  # default value
+        tk.OptionMenu(filter_frame, self.filter_var, "Status", "Date").pack(side="left")
+
+        tk.Label(filter_frame, text="Value:").pack(side="left")
+        self.filter_value_entry = tk.Entry(filter_frame)
+        self.filter_value_entry.pack(side="left")
+
+        tk.Button(filter_frame, text="Apply Filter", command=self.apply_filter).pack(side="left")
+
+    def apply_filter(self):
+        filter_by = self.filter_var.get()
+        filter_value = self.filter_value_entry.get()
+        filtered_orders = self.user_profile.order_history
+        if filter_by and filter_value:
+            filtered_orders = [order for order in self.user_profile.order_history
+                               if order[filter_by] == filter_value]
+        for i in self.order_history.tree.get_children():
+            self.order_history.tree.delete(i)
+        for order in filtered_orders:
+            self.order_history.tree.insert("", "end", values=(order["order_id"], order["date"], order["total_amount"], order["status"]))
 
 class AddItemPopup(tk.Toplevel):
     def __init__(self, master, menu, cart):
@@ -293,12 +368,28 @@ class CartViewPopup(tk.Toplevel):
         super().__init__(master)
         self.title("Cart Items")
 
-        items = cart.view_cart()
-        if not items:
+        self.cart = cart
+        self.items = cart.view_cart()
+        if not self.items:
             tk.Label(self, text="Your cart is empty").pack(pady=20)
         else:
-            for i in items:
-                tk.Label(self, text=f"{i['name']} x{i['quantity']} = ${i['subtotal']:.2f}").pack()
+            for i in self.items:
+                item_frame = tk.Frame(self)
+                item_frame.pack(pady=5, padx=10)
+                tk.Label(item_frame, text=f"{i['name']} x{i['quantity']} = ${i['subtotal']:.2f}").pack(side="left")
+                tk.Entry(item_frame, width=5).pack(side="left")  # Quantity input field
+                tk.Button(item_frame, text="Update",command=lambda item=i['name']: master.update_item_quantity_in_cart(item,int(self.get_entry_value()))).pack(side="right")
+                tk.Button(item_frame, text="Remove",command=lambda item=i['name']: master.remove_item_from_cart(item)).pack(side="right")
+
+        items = cart.view_cart()
+
+    def get_entry_value(self):
+        """
+        Gets the value from the last quantity input field.
+        """
+        # This method should be updated to correctly retrieve the value from the entry widget
+        # For now, it's a placeholder to show where the logic will go
+        return "1"  # Placeholder return
 
 
 class CheckoutPopup(tk.Toplevel):
@@ -347,6 +438,10 @@ class CheckoutPopup(tk.Toplevel):
         # Confirm the order
         result = self.order_placement.confirm_order(payment_method_obj)
         if result["success"]:
+            order_id = "ORD123456"  # Simulate an order ID.
+            items = self.order_placement.cart.view_cart()
+            total = self.order_placement.cart.calculate_total()["total"]
+            self.order_placement.save_order_history(order_id, items, total, "pending")
             messagebox.showinfo("Order Confirmed", f"Order ID: {result['order_id']}\nEstimated Delivery: {result['estimated_delivery']}")
             self.destroy()
         else:
